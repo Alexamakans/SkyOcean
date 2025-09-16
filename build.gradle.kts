@@ -164,9 +164,17 @@ cloche {
                 implementation(rconfig)
 
                 val mongoVersion = "5.5.1"
+                val reactorVersion = "3.6.9"
+
                 include("org.mongodb:bson:$mongoVersion") { isTransitive = false }
                 include("org.mongodb:mongodb-driver-core:$mongoVersion") { isTransitive = false }
                 include("org.mongodb:mongodb-driver-reactivestreams:$mongoVersion") { isTransitive = false }
+
+                // >>> Add Reactor (runtime needed) <<<
+                include("io.projectreactor:reactor-core:$reactorVersion") { isTransitive = false }
+
+                // (optional) only if not already pulled by reactor-core
+                include("org.reactivestreams:reactive-streams:1.0.4") { isTransitive = false }
 
                 include(libs.resourceful.config.kotlin) { isTransitive = false }
                 include(libs.keval) { isTransitive = false }
