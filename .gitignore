@@ -45,3 +45,6 @@ bin/
 .DS_Store
 /.idea/
 /run/
+
+/mongo_data
+.env

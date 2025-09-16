@@ -77,6 +77,10 @@ cloche {
         implementation(libs.resourceful.config.kotlin) { isTransitive = false }
 
         implementation(libs.fabric.language.kotlin)
+
+        implementation("org.mongodb:mongodb-driver-reactivestreams:5.5.1")
+        implementation("org.mongodb:mongodb-driver-core:5.5.1")
+        implementation("org.mongodb:bson:5.5.1")
     }
 
     common {
@@ -158,6 +162,11 @@ cloche {
                 fabricApi(fabricApiVersion, minecraftVersion)
                 implementation(olympus)
                 implementation(rconfig)
+
+                val mongoVersion = "5.5.1"
+                include("org.mongodb:bson:$mongoVersion") { isTransitive = false }
+                include("org.mongodb:mongodb-driver-core:$mongoVersion") { isTransitive = false }
+                include("org.mongodb:mongodb-driver-reactivestreams:$mongoVersion") { isTransitive = false }
 
                 include(libs.resourceful.config.kotlin) { isTransitive = false }
                 include(libs.keval) { isTransitive = false }
