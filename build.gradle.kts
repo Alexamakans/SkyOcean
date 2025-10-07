@@ -438,5 +438,3 @@ gradle.startParameter.apply {
         }
     })
 }
-idea.project {
-}
