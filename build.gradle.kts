@@ -174,9 +174,9 @@ cloche {
 
             dependencies {
                 fabricApi(fabricApiVersion, minecraftVersion)
-                implementation(olympus) { isTransitive = false }
-                implementation(rconfig) { isTransitive = false }
-                implementation(rlib) { isTransitive = false }
+                implementation(olympus)
+                implementation(rconfig)
+                implementation(rlib)
 
                 val mongoVersion = "5.5.1"
                 val reactorVersion = "3.6.9"
@@ -437,4 +437,6 @@ gradle.startParameter.apply {
             taskNames.filter { it.contains("clean") }.forEach(::addFirst)
         }
     })
+}
+idea.project {
 }
