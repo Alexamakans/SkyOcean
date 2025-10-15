@@ -20,13 +20,15 @@ import org.reactivestreams.Subscriber
 import org.reactivestreams.Subscription
 import tech.thatgravyboat.skyblockapi.api.events.base.Subscription as EventSub
 import tech.thatgravyboat.skyblockapi.api.events.base.predicates.TimePassed
-import tech.thatgravyboat.skyblockapi.api.events.profile.ProfileChangeEvent
 import tech.thatgravyboat.skyblockapi.api.events.time.TickEvent
-import tech.thatgravyboat.skyblockapi.helpers.McPlayer
 import tech.thatgravyboat.skyblockapi.utils.json.Json.toDataOrThrow
 import tech.thatgravyboat.skyblockapi.utils.json.Json.toJson
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CopyOnWriteArrayList
+import com.mojang.logging.LogUtils
+import kotlin.time.Duration.Companion.seconds
+import kotlin.time.TimeSource
+
 
 /**
  * Stand-alone cloud storage for ChestItem lists.
@@ -43,15 +45,16 @@ internal class CloudStorage(
     private val defaultData: () -> CopyOnWriteArrayList<ChestItem> = { CopyOnWriteArrayList() },
     private val itemCodec: Codec<ChestItem> = SkyOceanCodecs.ChestItemCodec.codec(),
 ) {
+    private var logger = LogUtils.getLogger()
+    private val t = TimeSource.Monotonic
+    private val invalidateAfter = 1.seconds
+    private var lastFetch = t.markNow()
 
     // In-memory cache (can be stale; that's okay by design)
     private lateinit var data: CopyOnWriteArrayList<ChestItem>
 
     // Snapshot to compute per-item deletions
     private var lastSnapshot: Map<String, ChestItem> = emptyMap()
-
-    // Track which profile the cache belongs to
-    private var activeProfile: String? = null
 
     private val collection: MongoCollection<Document> by lazy {
         mongo.getDatabase(databaseName).getCollection(collectionName)
@@ -63,14 +66,11 @@ internal class CloudStorage(
 
     // ---- Public API (mirrors enough of ProfileStorage to be drop-in) ---------
 
-    fun get(): CopyOnWriteArrayList<ChestItem>? {
-        val current = currentProfile ?: return null
+    fun get(): CopyOnWriteArrayList<ChestItem> {
         if (!this::data.isInitialized) {
             data = defaultData()
         }
-        if (activeProfile != current) {
-            load() // kick off background load; return stale data
-        }
+        load()
         return data
     }
 
@@ -80,14 +80,18 @@ internal class CloudStorage(
 
     // You can call manually, but normally triggered via autosave tick
     fun load() {
-        val current = currentProfile ?: return
-        activeProfile = current
         if (!this::data.isInitialized) data = defaultData()
+        if (t.markNow() - lastFetch < invalidateAfter) {
+            return
+        }
+        lastFetch = t.markNow()
 
-        val uuid = McPlayer.uuid.toString()
-        val filter = Filters.ne("deleted", true)
-
-        collection.find(filter).subscribe(
+        logger.warn("CloudStorage.load() triggered")
+        //val filter = Filters.and(
+        //    Filters.ne("deleted", true),
+        //    Filters.not(Filters.regex("dataJson", "\\\"item_stack\\\"\\s*:\\s*\\{\\s*\\}"))
+        //)
+        collection.find().subscribe(
             onNext = { doc ->
                 decodeDoc(doc)?.let { incoming ->
                     val key = keyOf(incoming)
@@ -98,10 +102,10 @@ internal class CloudStorage(
                     }
                 }
             },
-            onError = { e -> SkyOcean.error("Mongo load() failed for profile $current", e) },
+            onError = { e -> logger.error("Mongo load() failed", e) },
             onComplete = {
                 lastSnapshot = data.associateBy { keyOf(it) }
-                SkyOcean.debug("Cloud load complete: ${lastSnapshot.size} chest items for $uuid/$current")
+                logger.debug("Cloud load complete: ${lastSnapshot.size} chest items")
             }
         )
     }
@@ -119,8 +123,8 @@ internal class CloudStorage(
         // Per-item deletions
         removedItems.forEach { item ->
             collection.updateOne(keyFilter(item), softDeletePipeline(item), UpdateOptions().upsert(true)).subscribe(
-                onComplete = { SkyOcean.debug("Deleted ${prettyKey(item)} from Mongo.") },
-                onError = { e -> SkyOcean.error("Delete failed for ${prettyKey(item)}", e) }
+                onComplete = { logger.debug("Deleted ${prettyKey(item)} from Mongo.") },
+                onError = { e -> logger.error("Delete failed for ${prettyKey(item)}", e) }
             )
         }
 
@@ -130,7 +134,7 @@ internal class CloudStorage(
             val filter = keyFilter(item)
             val pipeline = gatedUpsertPipeline(item)
             collection.updateOne(filter, pipeline, opts).subscribe(
-                onError = { e -> SkyOcean.error("Upsert failed for ${prettyKey(item)}", e) }
+                onError = { e -> logger.error("Upsert failed for ${prettyKey(item)}", e) }
             )
         }
 
@@ -138,7 +142,7 @@ internal class CloudStorage(
         lastSnapshot = currentMap
     }
 
-    private fun ensureIndexes(coll: com.mongodb.reactivestreams.client.MongoCollection<org.bson.Document>) {
+    private fun ensureIndexes(coll: MongoCollection<Document>) {
         val idx = Indexes.compoundIndex(
             Indexes.ascending(
                 "slot", "posX", "posY", "posZ", "pos2X", "pos2Y", "pos2Z"
@@ -150,36 +154,33 @@ internal class CloudStorage(
 
     // Aggregation-pipeline update that only applies changes when incoming is newer
     private fun gatedUpsertPipeline(item: ChestItem): List<Bson> {
-        val newer = Document("\$gt", listOf(item.lastAccessed, Document("\$ifNull", listOf("\$lastAccessed", -1L))))
+        val newer = Document($$"$gt", listOf(item.lastAccessed, Document($$"$ifNull", listOf($$"$lastAccessed", -1L))))
         val setPayload = Document(mapOf(
-            "lastAccessed" to Document("\$cond", listOf(newer, item.lastAccessed, "\$lastAccessed")),
-            "slot" to Document("\$cond", listOf(newer, item.slot, "\$slot")),
-            "posX" to Document("\$cond", listOf(newer, item.pos.x, "\$posX")),
-            "posY" to Document("\$cond", listOf(newer, item.pos.y, "\$posY")),
-            "posZ" to Document("\$cond", listOf(newer, item.pos.z, "\$posZ")),
-            "pos2X" to Document("\$cond", listOf(newer, item.pos2?.x, "\$pos2X")),
-            "pos2Y" to Document("\$cond", listOf(newer, item.pos2?.y, "\$pos2Y")),
-            "pos2Z" to Document("\$cond", listOf(newer, item.pos2?.z, "\$pos2Z")),
-            "deleted" to Document("\$cond", listOf(newer, false, "\$deleted")),
-            "dataJson" to Document("\$cond", listOf(newer, encodeJson(item), "\$dataJson")),
+            "lastAccessed" to Document($$"$cond", listOf(newer, item.lastAccessed, $$"$lastAccessed")),
+            "slot" to Document($$"$cond", listOf(newer, item.slot, $$"$slot")),
+            "posX" to Document($$"$cond", listOf(newer, item.pos.x, $$"$posX")),
+            "posY" to Document($$"$cond", listOf(newer, item.pos.y, $$"$posY")),
+            "posZ" to Document($$"$cond", listOf(newer, item.pos.z, $$"$posZ")),
+            "pos2X" to Document($$"$cond", listOf(newer, item.pos2?.x, $$"$pos2X")),
+            "pos2Y" to Document($$"$cond", listOf(newer, item.pos2?.y, $$"$pos2Y")),
+            "pos2Z" to Document($$"$cond", listOf(newer, item.pos2?.z, $$"$pos2Z")),
+            "deleted" to Document($$"$cond", listOf(newer, false, $$"$deleted")),
+            "dataJson" to Document($$"$cond", listOf(newer, encodeJson(item), $$"$dataJson")),
+            // was `$currentDate: { writeAt: true }`
+            "writeAt" to Document($$"$cond", listOf(newer, $$$"$$NOW", $$"$writeAt")),
         ))
-        return listOf(
-            Document("\$set", setPayload),
-            Document("\$currentDate", Document("writeAt", true)) // optional observability
-        )
+        return listOf(Document($$"$set", setPayload))
     }
 
     private fun softDeletePipeline(item: ChestItem): List<Bson> {
-        val newer = Document("\$gt", listOf(item.lastAccessed, Document("\$ifNull", listOf("\$lastAccessed", -1L))))
+        val newer = Document($$"$gt", listOf(item.lastAccessed, Document($$"$ifNull", listOf($$"$lastAccessed", -1L))))
         val setPayload = Document(mapOf(
-            "lastAccessed" to Document("\$cond", listOf(newer, item.lastAccessed, "\$lastAccessed")),
-            "deleted" to Document("\$cond", listOf(newer, true, "\$deleted")),
-            "deletedAt" to Document("\$cond", listOf(newer, item.lastAccessed, "\$deletedAt")),
+            "lastAccessed" to Document($$"$cond", listOf(newer, item.lastAccessed, $$"$lastAccessed")),
+            "deleted" to Document($$"$cond", listOf(newer, true, $$"$deleted")),
+            "deletedAt" to Document($$"$cond", listOf(newer, item.lastAccessed, $$"$deletedAt")),
+            "writeAt" to Document($$"$cond", listOf(newer, $$$"$$NOW", $$"$writeAt")),
         ))
-        return listOf(
-            Document("\$set", setPayload),
-            Document("\$currentDate", Document("writeAt", true))
-        )
+        return listOf(Document($$"$set", setPayload))
     }
 
     private fun keyFilter(item: ChestItem): Bson = Filters.and(
@@ -215,7 +216,7 @@ internal class CloudStorage(
     // Minimal reactive subscribe helper (non-blocking)
     private fun <T> Publisher<T>.subscribe(
         onNext: (T) -> Unit = {},
-        onError: (Throwable) -> Unit = { SkyOcean.error("Mongo error", it) },
+        onError: (Throwable) -> Unit = { logger.error("Mongo error", it) },
         onComplete: () -> Unit = {}
     ) {
         this.subscribe(object : Subscriber<T> {
@@ -231,12 +232,6 @@ internal class CloudStorage(
     @Module
     companion object {
         val requiresSave = mutableSetOf<CloudStorage>()
-        var currentProfile: String? = null
-
-        @EventSub
-        fun onProfileSwitch(event: ProfileChangeEvent) {
-            currentProfile = event.name
-        }
 
         @EventSub(TickEvent::class)
         @TimePassed("5s")
