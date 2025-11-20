@@ -78,6 +78,11 @@ object IslandChestStorage {
         storage.save()
     }
 
+    fun clear() {
+        this.storage.get()?.clear()
+        save()
+    }
+
     fun save() {
         storage.save()
     }

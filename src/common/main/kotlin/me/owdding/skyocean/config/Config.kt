@@ -21,6 +21,7 @@ import me.owdding.skyocean.config.features.mining.MiningRetexture
 import me.owdding.skyocean.config.features.misc.CraftHelperConfig
 import me.owdding.skyocean.config.features.misc.MiscConfig
 import me.owdding.skyocean.config.features.misc.MobIconsConfig
+import me.owdding.skyocean.config.hidden.OverlayPositions
 import me.owdding.skyocean.config.patcher.ConfigPatches
 import me.owdding.skyocean.utils.SkyOceanModifyIndicator
 import me.owdding.skyocean.utils.chat.ChatUtils
@@ -53,6 +54,7 @@ object Config : ConfigKt("skyocean/config") {
             category(CraftHelperConfig)
         }
         category(Buttons)
+        category(OverlayPositions)
 
         separator("skyocean.config.main.modifications")
     }
@@ -67,6 +69,13 @@ object Config : ConfigKt("skyocean/config") {
     val prefixGradient: OceanGradients by invalidProperty(
         enum(OceanGradients.DEFAULT) {
             translation = "skyocean.config.main.prefix_gradient"
+        },
+        ChatUtils.prefixDelegate,
+    )
+
+    val clickablePrefix: Boolean by invalidProperty(
+        boolean(true) {
+            translation = "skyocean.config.main.clickable_prefix"
         },
         ChatUtils.prefixDelegate,
     )

@@ -1,11 +1,12 @@
 @file:Suppress("UnstableApiUsage")
 @file:OptIn(ExperimentalPathApi::class)
 
-import com.google.gson.JsonElement
-import com.google.gson.JsonObject
+import dev.detekt.gradle.Detekt
+import dev.detekt.gradle.DetektCreateBaselineTask
 import earth.terrarium.cloche.api.metadata.FabricMetadata
 import earth.terrarium.cloche.api.metadata.ModMetadata
 import earth.terrarium.cloche.api.target.compilation.ClocheDependencyHandler
+import me.owdding.gradle.toPath
 import net.msrandom.minecraftcodev.core.utils.lowerCamelCaseGradleName
 import net.msrandom.minecraftcodev.core.utils.toPath
 import net.msrandom.minecraftcodev.runs.MinecraftRunConfiguration
@@ -22,9 +23,8 @@ plugins {
     alias(libs.plugins.kotlin)
     alias(libs.plugins.terrarium.cloche)
     alias(libs.plugins.meowdding.resources)
-    alias(libs.plugins.meowdding.repo)
     alias(libs.plugins.kotlin.symbol.processor)
-    //alias(libs.plugins.detekt) - temporarily disabled
+    alias(libs.plugins.detekt)
     alias(libs.plugins.meowdding.gradle)
     `museum-data` // defined in buildSrc
 }
@@ -57,6 +57,7 @@ dependencies {
     compileOnly(libs.kotlin.stdlib)
 
     //detektPlugins(project(":detekt"))
+    detektPlugins(libs.detekt.ktlintWrapper)
 }
 
 cloche {
@@ -65,7 +66,7 @@ cloche {
         name = "SkyOcean"
         icon = "assets/skyocean/skyocean-big.png"
         description = "SkyOcean is a hypixel skyblock mod that aims to provide a better playing experience by integrating QOL elements in an unnoticeable way."
-        license = "MIT"
+        license = "Modified MIT"
         clientOnly = true
     }
 
@@ -177,6 +178,7 @@ cloche {
                 implementation(olympus)
                 implementation(rconfig)
                 implementation(rlib)
+                compileOnly(libs.meowdding.remote.repo)
 
                 val mongoVersion = "5.5.1"
                 val reactorVersion = "3.6.9"
@@ -276,7 +278,6 @@ compactingResources {
         configureTask(this)
     }
 
-    compactToArray("recipes")
     removeComments("unobtainable_ids")
     downloadResource("https://raw.githubusercontent.com/NotEnoughUpdates/NotEnoughUpdates-REPO/refs/heads/master/constants/dyes.json", "dyes.json")
     downloadResource("https://raw.githubusercontent.com/NotEnoughUpdates/NotEnoughUpdates-REPO/refs/heads/master/constants/animatedskulls.json", "skulls.json")
@@ -284,30 +285,6 @@ compactingResources {
         "https://raw.githubusercontent.com/Campionnn/SkyShards-Parser/55483450ff83e1bf1e453f31797cedb08b0c2733/shard-data.json",
         "skyshards_data.json"
     )
-}
-
-repo {
-    val predicate: (JsonElement) -> Boolean = {
-        when (it) {
-            is JsonObject -> it.size() > 1
-            else -> true
-        }
-    }
-    hotm {
-        excludeAllExcept {
-            name()
-            cost()
-        }
-        withPredicate(predicate)
-    }
-    hotf {
-        excludeAllExcept {
-            name()
-            cost()
-        }
-        withPredicate(predicate)
-    }
-    sacks { includeAll() }
 }
 
 tasks {
@@ -428,6 +405,31 @@ meowdding {
     //configureDetekt = true
 
     codecVersion = libs.versions.meowdding.ktcodecs
+}
+
+detekt {
+    source.setFrom(project.sourceSets.map { it.allSource })
+    config.from(files("$rootDir/detekt/detekt.yml"))
+    baseline = file("$rootDir/detekt/baseline.xml")
+    buildUponDefaultConfig = true
+    parallel = true
+}
+
+tasks.withType<Detekt>().configureEach {
+    onlyIf {
+        project.findProperty("skipDetekt") != "true"
+    }
+    exclude { it.file.toPath().toAbsolutePath().startsWith(project.layout.buildDirectory.toPath()) }
+    reports {
+        html.required.set(true)
+        xml.required.set(true)
+        sarif.required.set(true)
+        md.required.set(true)
+    }
+}
+tasks.withType<DetektCreateBaselineTask>().configureEach {
+    exclude { it.file.toPath().toAbsolutePath().startsWith(project.layout.buildDirectory.toPath()) }
+    outputs.upToDateWhen { false }
 }
 
 gradle.startParameter.apply {

@@ -2,9 +2,9 @@ package me.owdding.skyocean.data.profile
 
 import com.mojang.serialization.Codec
 import me.owdding.skyocean.features.recipe.crafthelper.CraftHelperRecipe
-import me.owdding.skyocean.features.recipe.crafthelper.NormalCraftHelperRecipe
-import me.owdding.skyocean.features.recipe.crafthelper.SkyShardsMethod
-import me.owdding.skyocean.features.recipe.crafthelper.SkyShardsRecipe
+import me.owdding.skyocean.features.recipe.crafthelper.data.NormalCraftHelperRecipe
+import me.owdding.skyocean.features.recipe.crafthelper.data.SkyShardsMethod
+import me.owdding.skyocean.features.recipe.crafthelper.data.SkyShardsRecipe
 import me.owdding.skyocean.generated.SkyOceanCodecs
 import me.owdding.skyocean.utils.LateInitModule
 import me.owdding.skyocean.utils.storage.ProfileStorage
@@ -42,6 +42,7 @@ object CraftHelperStorage {
     val selectedItem
         get() = when (val data = data) {
             is NormalCraftHelperRecipe -> data.item
+            is SkyShardsRecipe -> data.tree.shard
             else -> null
         }
     val selectedAmount

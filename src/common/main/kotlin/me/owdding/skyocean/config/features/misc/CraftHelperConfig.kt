@@ -1,6 +1,7 @@
 package me.owdding.skyocean.config.features.misc
 
 import com.teamresourceful.resourcefulconfigkt.api.CategoryKt
+import me.owdding.skyocean.config.separator
 import me.owdding.skyocean.features.item.sources.ItemSources
 import me.owdding.skyocean.features.recipe.crafthelper.display.CraftHelperFormat
 import me.owdding.skyocean.features.recipe.crafthelper.display.CraftHelperLocation
@@ -8,8 +9,16 @@ import me.owdding.skyocean.features.recipe.crafthelper.display.CraftHelperLocati
 object CraftHelperConfig : CategoryKt("crafthelper") {
     override val name get() = Translated("skyocean.config.misc.crafthelper")
 
+    init {
+        separator("skyocean.config.misc.crafthelper")
+    }
+
     var enabled by boolean(true) {
         translation = "skyocean.config.misc.crafthelper.enabled"
+    }
+
+    var quickSet by boolean(true) {
+        translation = "skyocean.config.misc.crafthelper.quick_set"
     }
 
     var hideCompleted by boolean(true) {
@@ -42,5 +51,17 @@ object CraftHelperConfig : CategoryKt("crafthelper") {
 
     var formatter by enum(CraftHelperFormat.TREE) {
         translation = "skyocean.config.misc.crafthelper.tree_formatter"
+    }
+
+    var rawFormatterHideCompleted by boolean(false) {
+        translation = "skyocean.config.misc.crafthelper.raw_formatter_hide_completed"
+    }
+
+    var enableOverlay by boolean(false) {
+        translation = "skyocean.config.misc.crafthelper.enable_hud_overlay"
+    }
+
+    var overlayBackground by boolean(false) {
+        translation = "skyocean.config.misc.crafthelper.overlay_background"
     }
 }

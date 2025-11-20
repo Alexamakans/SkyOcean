@@ -29,6 +29,10 @@
           "@value": "Prefix Gradient",
           "desc": "Changes the gradient that is used for the prefix."
         },
+        "clickable_prefix": {
+          "@value": "Clickable Chat Message Prefix",
+          "desc": "Makes SkyOceans chat message prefix clickable, opening the config screen."
+        },
         "modify_indicator": {
           "@value": "SkyOcean Modify Indicator",
           "desc": [
@@ -116,6 +120,10 @@
         },
         "mineshaft": {
           "@value": "Mineshaft",
+          "pity_message": {
+            "@value": "Pity Message",
+            "desc": "Sends your current Pity when you find a mineshaft."
+          },
           "announce": {
             "@value": "Announce Mineshaft Enter",
             "desc": [
@@ -314,6 +322,10 @@
             "@value": "Item Highlight",
             "desc": "Choose what color the searched item will be highlighted with."
           },
+          "highlightTime": {
+            "@value": "Highlight Time",
+            "desc": "Amount of time that items will be highlighted for, in seconds."
+          },
           "preserve_search": {
             "@value": "Preserve Search",
             "desc": "When reopening the item search, it will keep the previous search input and category instead of clearing them."
@@ -341,6 +353,10 @@
           "enabled": {
             "@value": "Enable Craft Helper",
             "desc": "Whether the craft helper is enabled or not, this is the main switch."
+          },
+          "quick_set": {
+            "@value": "Quick Set Crafthelper Item",
+            "desc": "Adds a clickable item into multiple different screens like recipe, forge, visitors, ... to quickly add the item into the crafthelper."
           },
           "hideCompleted": {
             "@value": "Hide completed",
@@ -381,6 +397,18 @@
             "desc": "Changes the appearance of the craft helper tree.",
             "raw": "Raw",
             "tree": "Tree"
+          },
+          "raw_formatter_hide_completed": {
+            "@value": "Hide completed elements",
+            "desc": "Hides completed elements from the raw formatter, <yellow>also applies to the hud element!"
+          },
+          "enable_hud_overlay": {
+            "@value": "Enable HUD overlay",
+            "desc": "Shows the progress to finishing the recipe on screen."
+          },
+          "overlay_background": {
+            "@value": "Enable overlay background",
+            "desc": "Adds a background behind the overlay to make it more readable."
           }
         },
         "transparentArmor": {
@@ -697,6 +725,10 @@
             "desc": "Mutes all phantoms making them not induce ear pain.",
             "warning": "<yellow>SkyOcean mutes the phantom sounds by default, if you wish to change this open the config and search for <gold>Mute the Phantoms</gold>!"
           },
+          "moongladeBeaconColor": {
+            "@value": "Moonglade Beacon Color",
+            "desc": "Changes the Moonglade Beacon beam color in Galatea to <red>Red</red> if it's inactive, and <green>green</green> if its active."
+          },
           "shulkerOverwrite": {
             "@value": "Retexture shulker",
             "desc": "Recolors the shulkers to make them more visible."
@@ -743,7 +775,8 @@
     "keybind": {
       "item_search": "Open Item Search",
       "item_value": "Open Item Value",
-      "crafthelper": "Set as active Craft Helper Item"
+      "crafthelper": "Set as active Craft Helper Item",
+      "item_highlight": "Highlight matching Items"
     },
     "gradients": {
       "default": "Default",
@@ -755,6 +788,13 @@
       "asexual": "Asexual",
       "non_binary": "Non Binary",
       "trans": "Transgender"
+    },
+    "overlays": {
+      "crafthelper": "Crafthelper",
+      "background": {
+        "disable": "Disable background",
+        "enable": "Enable background"
+      }
     }
   }
 }

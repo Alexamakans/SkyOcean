@@ -1,6 +1,7 @@
 package me.owdding.skyocean.utils.chat
 
 import com.mojang.serialization.MapCodec
+import com.teamresourceful.resourcefulconfig.api.client.ResourcefulConfigScreen
 import com.teamresourceful.resourcefulconfig.api.types.info.Translatable
 import me.owdding.lib.events.RegisterTextShaderEvent
 import me.owdding.lib.rendering.text.TextShader
@@ -18,6 +19,7 @@ import net.minecraft.network.chat.Component
 import net.minecraft.network.chat.MutableComponent
 import net.minecraft.resources.ResourceLocation
 import tech.thatgravyboat.skyblockapi.api.events.base.Subscription
+import tech.thatgravyboat.skyblockapi.helpers.McClient
 import tech.thatgravyboat.skyblockapi.utils.text.Text
 import tech.thatgravyboat.skyblockapi.utils.text.Text.send
 import tech.thatgravyboat.skyblockapi.utils.text.TextBuilder.append
@@ -25,6 +27,8 @@ import tech.thatgravyboat.skyblockapi.utils.text.TextColor
 import tech.thatgravyboat.skyblockapi.utils.text.TextProperties.stripped
 import tech.thatgravyboat.skyblockapi.utils.text.TextStyle.color
 import tech.thatgravyboat.skyblockapi.utils.text.TextStyle.font
+import tech.thatgravyboat.skyblockapi.utils.text.TextStyle.hover
+import tech.thatgravyboat.skyblockapi.utils.text.TextStyle.onClick
 import tech.thatgravyboat.skyblockapi.utils.text.TextStyle.shadowColor
 import tech.thatgravyboat.skyblockapi.utils.time.currentInstant
 import tech.thatgravyboat.skyblockapi.utils.time.since
@@ -94,12 +98,17 @@ internal object ChatUtils {
     val ICON_COMPONENT = Text.of(ICON) { this.color = DARK_OCEAN_BLUE }
     val ICON_SPACE_COMPONENT = Text.of(ICON_WITH_SPACE) { this.color = DARK_OCEAN_BLUE }
     val SPACE_ICON_COMPONENT = Text.of(SPACE_WITH_ICON) { this.color = DARK_OCEAN_BLUE }
+    val SEPERATOR_COMPONENT = Text.of(" | ", OceanColors.SEPARATOR)
 
     val prefixDelegate = CachedValue {
         Text.of {
             append("[")
             append("SkyOcean") {
                 this.textShader = Config.prefixGradient.takeUnless { it.isDisabled }
+                if (Config.clickablePrefix) {
+                    this.onClick { McClient.setScreenAsync { ResourcefulConfigScreen.getFactory("skyocean").apply(null) } }
+                    this.hover = Text.of("Click to open SkyOcean's config!").withColor(TextColor.GRAY)
+                }
             }
             append("] ")
             this.color = TextColor.GRAY
@@ -146,6 +155,10 @@ object OceanColors {
     const val SKYOCEAN_BLUE = 0x87CEEB
     const val LIGHT_GRAYISH_CYAN = 0xcff8ff
     const val BETTER_GOLD = 0xfc6f03
+
+    const val BASE_TEXT = 0xcdd6f4
+    const val SEPARATOR = 0x585b70
+    const val HIGHLIGHT = 0xcba6f7
 }
 
 enum class OceanGradients(val colors: List<Int>, private val shader: GradientTextShader = GradientTextShader(colors)) : TextShader by shader, Translatable {

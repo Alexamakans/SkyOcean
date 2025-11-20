@@ -35,18 +35,17 @@ class ItemSelectorOverlay(
     private val query = ListenableState.of("")
     private val bounds = Rect(widget.x, widget.y, widget.width, widget.height)
     private val entries by lazy {
-        LayoutWidget(ClearableGridLayout()).also {
-            it.withPosition(bounds.x, bounds.y + bounds.height)
-            it.withContentMargin(1)
-            it.withScrollableY(TriState.UNDEFINED)
-            it.withTexture(UIConstants.LIST_BG)
-            it.withScrollbarBackground(UIConstants.MODAL_INSET)
-            it.withLayoutCallback { widget, layout ->
+        LayoutWidget(ClearableGridLayout()).apply {
+            withPosition(bounds.x, bounds.y + bounds.height)
+            withContentMargin(1)
+            withScrollableY(TriState.UNDEFINED)
+            withTexture(UIConstants.LIST_BG)
+            withScrollbarBackground(UIConstants.MODAL_INSET)
+            withLayoutCallback { widget, layout ->
                 widget.withSize(
                     bounds.width,
                     Ints.min(
                         layout.height,
-                        this.height - (bounds.y + bounds.height) - 4,
                         10 * 16,
                     ),
                 )
@@ -64,8 +63,10 @@ class ItemSelectorOverlay(
         Widgets.textInput(query) {
             it.withSize(bounds.width, bounds.height)
             it.withPosition(bounds.x, bounds.y)
-            it.isFocused = true
-        }.let(this::addRenderableWidget)
+        }.also {
+            addRenderableWidget(it)
+            focused = it
+        }
 
         this.addRenderableWidget(this.entries)
         update(query.get())

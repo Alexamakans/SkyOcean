@@ -17,17 +17,20 @@ import net.minecraft.world.item.ItemStack
 import tech.thatgravyboat.skyblockapi.api.events.base.Subscription
 import tech.thatgravyboat.skyblockapi.api.events.base.predicates.InventoryTitle
 import tech.thatgravyboat.skyblockapi.api.events.base.predicates.MustBeContainer
+import tech.thatgravyboat.skyblockapi.api.events.base.predicates.OnlyIn
 import tech.thatgravyboat.skyblockapi.api.events.render.RenderWorldEvent
 import tech.thatgravyboat.skyblockapi.api.events.screen.InventoryChangeEvent
 import tech.thatgravyboat.skyblockapi.api.item.replaceVisually
+import tech.thatgravyboat.skyblockapi.api.location.SkyBlockIsland.PRIVATE_ISLAND
 import tech.thatgravyboat.skyblockapi.api.profile.items.storage.PlayerStorageInstance
 import tech.thatgravyboat.skyblockapi.api.profile.items.storage.StorageAPI
 import tech.thatgravyboat.skyblockapi.helpers.McClient
+import tech.thatgravyboat.skyblockapi.helpers.McPlayer
+import tech.thatgravyboat.skyblockapi.helpers.McScreen
 import tech.thatgravyboat.skyblockapi.impl.tagkey.ItemTag
 import tech.thatgravyboat.skyblockapi.utils.extentions.cleanName
 import tech.thatgravyboat.skyblockapi.utils.extentions.getSkyBlockId
 import java.util.concurrent.CopyOnWriteArrayList
-import kotlin.time.Duration.Companion.seconds
 
 @Module
 object ItemHighlighter {
@@ -50,7 +53,7 @@ object ItemHighlighter {
     fun cancelOrScheduleClear() {
         future?.cancel(CancellationException("Item search has been canceled"))
         future = CoroutineScope(Dispatchers.Default).launch {
-            delay(10.seconds)
+            delay(MiscConfig.highlightTime)
             resetSearch()
         }
         future?.start()
@@ -94,6 +97,23 @@ object ItemHighlighter {
         }
     }
 
+    // TODO: add support for Sack/Storage highlighting when recalculating
+    fun recalculate() {
+        val filter = currentSearch ?: return
+        McPlayer.inventory.forEach {
+            if (filter.test(it)) it.highlight()
+        }
+        val menu = McScreen.asMenu ?: return
+        val slots = menu.menu.slots
+        for (slot in slots) {
+            val item = slot.item
+            if (filter.test(item)) {
+                item.highlight()
+                continue
+            }
+        }
+    }
+
     private val enderchest = Regex("Ender Chest Page (\\d)")
     private val backpack = Regex("Backpack Slot (\\d+)")
 
@@ -125,6 +145,7 @@ object ItemHighlighter {
     }
 
     @Subscription
+    @OnlyIn(PRIVATE_ISLAND)
     private fun RenderWorldEvent.AfterTranslucent.renderWorld() {
         atCamera {
             chests.forEach { block ->
