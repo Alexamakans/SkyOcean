@@ -27,7 +27,7 @@ import tech.thatgravyboat.skyblockapi.utils.extentions.scissor
 import tech.thatgravyboat.skyblockapi.utils.text.Text
 
 //? if > 1.21.8
-import net.minecraft.client.input.MouseButtonEvent
+/*import net.minecraft.client.input.MouseButtonEvent*/
 
 //? if > 1.21.5 {
 import net.minecraft.client.renderer.MultiBufferSource
@@ -79,15 +79,15 @@ class ItemWidgetRenderer(source: MultiBufferSource.BufferSource) : PictureInPict
         McClient.self.gameRenderer.lighting.setupFor(if (state.item.usesBlockLight()) Lighting.Entry.ITEMS_3D else Lighting.Entry.ITEMS_FLAT)
 
         //? if > 1.21.8 {
-        state.item.submit(
+        /*state.item.submit(
             stack,
             McClient.self.gameRenderer.featureRenderDispatcher.submitNodeStorage,
             LightTexture.FULL_BRIGHT,
             OverlayTexture.NO_OVERLAY,
             0,
         )
-        //?} else
-        /*state.item.render(stack, this.bufferSource, LightTexture.FULL_BRIGHT, OverlayTexture.NO_OVERLAY)*/
+        *///?} else
+        state.item.render(stack, this.bufferSource, LightTexture.FULL_BRIGHT, OverlayTexture.NO_OVERLAY)
 
         stack.popPose()
     }
@@ -203,20 +203,20 @@ class StyledItemWidget(val stack: ItemStack) : BaseWidget() {
     }
 
     //? if > 1.21.8 {
-    override fun onDrag(event: MouseButtonEvent, deltaX: Double, deltaY: Double) {
-    //?} else
-    /*override fun onDrag(mouseX: Double, mouseY: Double, deltaX: Double, deltaY: Double) {*/
+    /*override fun onDrag(event: MouseButtonEvent, deltaX: Double, deltaY: Double) {
+    *///?} else
+    override fun onDrag(mouseX: Double, mouseY: Double, deltaX: Double, deltaY: Double) {
         this.isAutoRotating = false
         this.rotation -= deltaX.toFloat() * 3
         this.rotation = (this.rotation + 360) % 360
     }
 
     //? if > 1.21.8 {
-    override fun onClick(event: MouseButtonEvent, doubleClick: Boolean) {
+    /*override fun onClick(event: MouseButtonEvent, doubleClick: Boolean) {
         val mouseX = event.x
         val mouseY = event.y
-    //?} else
-    /*override fun onClick(mouseX: Double, mouseY: Double) {*/
+    *///?} else
+    override fun onClick(mouseX: Double, mouseY: Double) {
         if (isMouseOverButton(mouseX.toInt(), mouseY.toInt()) && !this.isAutoRotating) {
             McClient.playSound(SoundEvents.UI_BUTTON_CLICK.value(), 1.0f, 0.25f)
             this.isAutoRotating = true

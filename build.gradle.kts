@@ -45,6 +45,7 @@ configurations {
     }
 }
 
+
 dependencies {
     attributesSchema {
         attribute(Attribute.of("earth.terrarium.cloche.minecraftVersion", String::class.java)) {
@@ -53,6 +54,10 @@ dependencies {
             }
         }
     }
+
+
+    val mongoVersion = "5.5.1"
+    val reactorVersion = "3.6.8"
 
     minecraft(versionedCatalog["minecraft"])
     mappings(loom.layered {
@@ -71,6 +76,43 @@ dependencies {
     includeImplementation(libs.meowdding.remote.repo)
     includeImplementation(libs.meowdding.lib)
     includeImplementation(libs.skyblockapi)
+
+    // MongoDB Reactive Streams Driver
+    include("org.mongodb:mongodb-driver-reactivestreams:$mongoVersion") {
+        isTransitive = false
+    }
+    modImplementation("org.mongodb:mongodb-driver-reactivestreams:$mongoVersion") {
+        isTransitive = false
+    }
+
+    // MongoDB Core Driver
+    include("org.mongodb:mongodb-driver-core:$mongoVersion") {
+        isTransitive = false
+    }
+    modImplementation("org.mongodb:mongodb-driver-core:$mongoVersion") {
+        isTransitive = false
+    }
+
+    // MongoDB BSON (full)
+    include("org.mongodb:bson:$mongoVersion") {
+        isTransitive = false
+    }
+    modImplementation("org.mongodb:bson:$mongoVersion") {
+        isTransitive = false
+    }
+
+    // --- Reactor Core ---
+    include("io.projectreactor:reactor-core:$reactorVersion") {
+        isTransitive = false
+    }
+    implementation("io.projectreactor:reactor-core:$reactorVersion") {
+        isTransitive = false
+    }
+
+    // Reactive Streams (needed for MongoDB)
+    include("org.reactivestreams:reactive-streams:1.0.4")
+    implementation("org.reactivestreams:reactive-streams:1.0.4")
+
 
     implementation(libs.keval)
     include(libs.keval)
@@ -158,206 +200,6 @@ tasks.named("build") {
         targetFile.parentFile.mkdirs()
         targetFile.writeBytes(sourceFile.readBytes())
     }
-
-    fun addDependencies(arg: ClocheDependencyHandler) = arg.apply {
-        implementation(libs.meowdding.lib)
-        implementation(libs.skyblockapi)
-        compileOnly(libs.skyblockapi.repo)
-        implementation(libs.keval)
-        implementation(libs.placeholders)
-        implementation(libs.resourceful.config.kotlin)
-
-        implementation(libs.fabric.language.kotlin)
-
-        implementation("org.mongodb:mongodb-driver-reactivestreams:5.5.1")
-        implementation("org.mongodb:mongodb-driver-core:5.5.1")
-        implementation("org.mongodb:bson:5.5.1")
-    }
-
-    common {
-        project.layout.projectDirectory.dir("src/mixins").toPath().listDirectoryEntries().filter { it.isRegularFile() }.forEach {
-            mixins.from("src/mixins/${it.name}")
-        }
-        accessWideners.from(project.layout.projectDirectory.file("src/skyocean.accesswidener"))
-
-        data {
-            dependencies { addDependencies(this) }
-        }
-        dependencies { addDependencies(this) }
-    }
-
-    fun createVersion(
-        name: String,
-        version: String = name,
-        loaderVersion: Provider<String> = libs.versions.fabric.loader,
-        fabricApiVersion: Provider<String> = libs.versions.fabric.api,
-        endAtSameVersion: Boolean = true,
-        minecraftVersionRange: ModMetadata.VersionRange.() -> Unit = {
-            start = version
-            if (endAtSameVersion) {
-                end = version
-                endExclusive = false
-            }
-        },
-        dependencies: MutableMap<String, Provider<MinimalExternalModuleDependency>>.() -> Unit = { },
-    ) {
-        val dependencies = mutableMapOf<String, Provider<MinimalExternalModuleDependency>>().apply(dependencies)
-        val olympus = dependencies["olympus"]!!
-        val rlib = dependencies["resourcefullib"]!!
-        val rconfig = dependencies["resourcefulconfig"]!!
-        val accesswidener = project.layout.projectDirectory.file("src/versions/${name}/skyocean.accesswidener")
-
-        fabric("versions:$name") {
-            tasks.named<Jar>(lowerCamelCaseGradleName(this.sourceSet.name, "includeJar")) {
-                archiveClassifier = name
-            }
-            includedClient()
-            minecraftVersion = version
-
-            this.loaderVersion = loaderVersion.get()
-
-            mixins.from("src/mixins/versioned/skyocean.${name.replace(".", "")}.mixins.json")
-
-            println("Acceswidener: " + accesswidener.toPath().toAbsolutePath().toString())
-            if (accesswidener.toPath().exists()) {
-                accessWideners.from(accesswidener)
-            }
-
-            // include(libs.hypixelapi) - included in sbapi
-
-            metadata {
-                fun kotlin(value: String): Action<FabricMetadata.Entrypoint> = Action {
-                    adapter = "kotlin"
-                    this.value = value
-                }
-                entrypoint("client", kotlin("me.owdding.skyocean.SkyOcean"))
-                entrypoint("fabric-datagen", kotlin("me.owdding.skyocean.datagen.dispatcher.SkyOceanDatagenEntrypoint"))
-
-                fun dependency(modId: String, version: Provider<String>? = null) {
-                    dependency {
-                        this.modId = modId
-                        this.required = true
-                        if (version != null) version {
-                            this.start = version
-                        }
-                    }
-                }
-
-                dependency {
-                    modId = "minecraft"
-                    required = true
-                    version(minecraftVersionRange)
-                }
-                dependency("fabric")
-                dependency("fabricloader", loaderVersion)
-                dependency("fabric-language-kotlin", libs.versions.fabric.language.kotlin)
-                dependency("resourcefullib", rlib.map { it.version!! })
-                dependency("skyblock-api", libs.versions.skyblockapi.asProvider())
-                dependency("olympus", olympus.map { it.version!! })
-                dependency("placeholder-api", libs.versions.placeholders)
-                dependency("resourcefulconfigkt", libs.versions.rconfigkt)
-                dependency("resourcefulconfig", rconfig.map { it.version!! })
-                dependency("meowdding-lib", libs.versions.meowdding.lib)
-            }
-
-            data()
-
-            dependencies {
-                fabricApi(fabricApiVersion, minecraftVersion)
-                implementation(olympus)
-                implementation(rconfig)
-                implementation(rlib)
-                compileOnly(libs.meowdding.remote.repo)
-
-                val mongoVersion = "5.5.1"
-                val reactorVersion = "3.6.9"
-
-                include("org.mongodb:bson:$mongoVersion") { isTransitive = false }
-                include("org.mongodb:mongodb-driver-core:$mongoVersion") { isTransitive = false }
-                include("org.mongodb:mongodb-driver-reactivestreams:$mongoVersion") { isTransitive = false }
-
-                // >>> Add Reactor (runtime needed) <<<
-                include("io.projectreactor:reactor-core:$reactorVersion") { isTransitive = false }
-
-                // (optional) only if not already pulled by reactor-core
-                include("org.reactivestreams:reactive-streams:1.0.4") { isTransitive = false }
-
-                include(libs.resourceful.config.kotlin) { isTransitive = false }
-                include(libs.keval) { isTransitive = false }
-                include(libs.placeholders) { isTransitive = false }
-                include(rlib) { isTransitive = false }
-                include(olympus) { isTransitive = false }
-                include(rconfig) { isTransitive = false }
-
-                include(libs.skyblockapi) { isTransitive = false }
-                include(libs.meowdding.lib) { isTransitive = false }
-
-                val mods = project.layout.buildDirectory.get().toPath().resolve("tmp/extracted${sourceSet.name}RuntimeMods")
-                val modsTmp = project.layout.buildDirectory.get().toPath().resolve("tmp/extracted${sourceSet.name}RuntimeMods/tmp")
-
-                mods.deleteRecursively()
-                modsTmp.createDirectories()
-                mods.createDirectories()
-
-                fun extractMods(file: java.nio.file.Path) {
-                    println("Adding runtime mod ${file.name}")
-                    val extracted = mods.resolve(file.name)
-                    file.copyTo(extracted, overwrite = true)
-                    if (!file.fileName.endsWith(".disabled.jar")) {
-                        modRuntimeOnly(files(extracted))
-                    }
-                    ZipFile(extracted.toFile()).use {
-                        it.entries().asIterator().forEach { file ->
-                            val name = file.name.replace(File.separator, "/")
-                            if (name.startsWith("META-INF/jars/") && name.endsWith(".jar")) {
-                                val data = it.getInputStream(file).readAllBytes()
-                                val file = modsTmp.resolve(name.substringAfterLast("/"))
-                                file.writeBytes(data, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.CREATE)
-                                extractMods(file)
-                            }
-                        }
-                    }
-                }
-
-                project.layout.projectDirectory.toPath().resolve("run/${name}Mods").takeIf { it.exists() }
-                    ?.listDirectoryEntries()?.filter { it.isRegularFile() }?.forEach { file ->
-                        extractMods(file)
-                    }
-
-                modsTmp.deleteRecursively()
-            }
-
-            runs {
-                clientData {
-                    mainClass("net.fabricmc.loader.impl.launch.knot.KnotClient")
-                }
-                client()
-            }
-
-        }
-    }
-
-    createVersion("1.21.5", fabricApiVersion = provider { "0.127.1" }) {
-        this["resourcefullib"] = libs.resourceful.lib1215
-        this["resourcefulconfig"] = libs.resourceful.config1215
-        this["olympus"] = libs.olympus.lib1215
-    }
-    createVersion("1.21.8", minecraftVersionRange = {
-        start = "1.21.6"
-        end = "1.21.8"
-        endExclusive = false
-    }) {
-        this["resourcefullib"] = libs.resourceful.lib1218
-        this["resourcefulconfig"] = libs.resourceful.config1218
-        this["olympus"] = libs.olympus.lib1218
-    }
-    /*createVersion("1.21.9", endAtSameVersion = false, fabricApiVersion = provider { "0.134.0" }) {
-        this["resourcefullib"] = libs.resourceful.lib1219
-        this["resourcefulconfig"] = libs.resourceful.config1219
-        this["olympus"] = libs.olympus.lib1219
-    }*/
-
-    mappings { official() }
 }
 
 compactingResources {

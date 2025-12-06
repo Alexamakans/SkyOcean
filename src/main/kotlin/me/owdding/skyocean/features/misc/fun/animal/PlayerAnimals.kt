@@ -13,7 +13,7 @@ import net.minecraft.client.model.EntityModel
 import net.minecraft.client.renderer.entity.EntityRendererProvider
 import net.minecraft.client.renderer.entity.LivingEntityRenderer
 import net.minecraft.client.renderer.entity.state.ArmedEntityRenderState
-import net.minecraft.client.renderer.entity.state.AvatarRenderState
+import net.minecraft.client.renderer.entity.state.PlayerRenderState as AvatarRenderState
 import net.minecraft.client.renderer.entity.state.HumanoidRenderState
 import net.minecraft.client.renderer.entity.state.LivingEntityRenderState
 import net.minecraft.resources.ResourceLocation

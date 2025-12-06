@@ -25,10 +25,11 @@ import tech.thatgravyboat.skyblockapi.utils.text.Text
 import tech.thatgravyboat.skyblockapi.utils.text.TextColor
 import tech.thatgravyboat.skyblockapi.utils.text.TextStyle.color
 import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.seconds
 
 @Overlay
 object CraftHelperOverlay : SkyOceanOverlay() {
-    private val layoutCache = CachedValue(250.milliseconds) {
+    private val layoutCache = CachedValue(10.seconds) {
         val state = state ?: return@CachedValue null
         LayoutFactory.vertical {
             val builder = WidgetBuilder(true) {}

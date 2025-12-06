@@ -61,9 +61,9 @@ internal fun renderFace(
 ) {
     ShapeRenderer.renderFace(
         //? if > 1.21.8 {
-        poseStack.last().pose(),
-        //?} else
-        /*poseStack,*/
+        /*poseStack.last().pose(),
+        *///?} else
+        poseStack,
         buffer.getBuffer(RenderTypes.BLOCK_FILL_QUAD),
         direction,
         vec6.a,

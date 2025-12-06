@@ -4,7 +4,7 @@ import com.teamresourceful.resourcefulconfig.api.types.info.Translatable
 import me.owdding.ktmodules.AutoCollect
 import me.owdding.skyocean.accessors.AvatarRenderStateAccessor
 import me.owdding.skyocean.config.features.misc.`fun`.PlayerAnimalConfig
-import net.minecraft.client.renderer.entity.state.AvatarRenderState
+import net.minecraft.client.renderer.entity.state.PlayerRenderState as AvatarRenderState
 import net.minecraft.client.renderer.entity.state.LivingEntityRenderState
 import net.minecraft.world.entity.EntityType
 import net.minecraft.world.entity.LivingEntity

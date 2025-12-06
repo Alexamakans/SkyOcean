@@ -5,7 +5,7 @@ import me.owdding.skyocean.features.misc.`fun`.animal.AnimalColor
 import me.owdding.skyocean.features.misc.`fun`.animal.AnimalModifier
 import me.owdding.skyocean.features.misc.`fun`.animal.AnimalModifier.Companion.createTranslationKey
 import me.owdding.skyocean.features.misc.`fun`.animal.RegisterAnimalModifier
-import net.minecraft.client.renderer.entity.state.AvatarRenderState
+import net.minecraft.client.renderer.entity.state.PlayerRenderState as AvatarRenderState
 import net.minecraft.client.renderer.entity.state.SheepRenderState
 import net.minecraft.world.entity.EntityType
 import net.minecraft.world.entity.animal.sheep.Sheep
@@ -24,13 +24,13 @@ object SheepModifier : AnimalModifier<Sheep, SheepRenderState> {
     }
 
     //? if > 1.21.8 {
-    var isJebSheep = PlayerAnimalConfig.createEntry("sheep_jeb") { id, type ->
+    /*var isJebSheep = PlayerAnimalConfig.createEntry("sheep_jeb") { id, type ->
         enum(id, AnimalModifier.BooleanState.RANDOM) {
             this.translation = createTranslationKey("sheep", "${type}_jeb")
             condition = isSelected(EntityType.SHEEP)
         }
     }
-    //?}
+    *///?}
 
     var isSheared = PlayerAnimalConfig.createEntry("sheep_sheared") { id, type ->
         enum(id, AnimalModifier.BooleanState.RANDOM) {
@@ -46,7 +46,7 @@ object SheepModifier : AnimalModifier<Sheep, SheepRenderState> {
     ) {
         state.woolColor = sheepColor.select(avatarState).dyeColor ?: getRandom(avatarState, colors)
         //? if > 1.21.8
-        state.isJebSheep = isJebSheep.select(avatarState).select(avatarState)
+        /*state.isJebSheep = isJebSheep.select(avatarState).select(avatarState)*/
         state.isSheared = isSheared.select(avatarState).select(avatarState)
     }
 }

@@ -10,7 +10,7 @@ import me.owdding.skyocean.features.misc.`fun`.animal.modifiers.WolfModifier.Sta
 import me.owdding.skyocean.features.misc.`fun`.animal.modifiers.WolfModifier.State.WILD
 import me.owdding.skyocean.utils.Utils.list
 import me.owdding.skyocean.utils.Utils.lookup
-import net.minecraft.client.renderer.entity.state.AvatarRenderState
+import net.minecraft.client.renderer.entity.state.PlayerRenderState as AvatarRenderState
 import net.minecraft.client.renderer.entity.state.WolfRenderState
 import net.minecraft.core.ClientAsset
 import net.minecraft.core.registries.Registries
@@ -53,7 +53,7 @@ object WolfModifier : AnimalModifier<Wolf, WolfRenderState> {
         state.isSitting = avatarState.isCrouching
     }
 
-    enum class State(val selector: ((WolfVariant) -> /*? if > 1.21.8 {*/ClientAsset.ResourceTexture/*?} else {*//*ClientAsset*//*?}*/)) : Translatable {
+    enum class State(val selector: ((WolfVariant) -> /*? if > 1.21.8 {*//*ClientAsset.ResourceTexture*//*?} else {*/ClientAsset/*?}*/)) : Translatable {
         RANDOM({ it.assetInfo.tame }),
 
         TAME({ it.assetInfo.tame }),

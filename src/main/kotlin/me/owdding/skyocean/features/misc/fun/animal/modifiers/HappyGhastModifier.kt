@@ -6,7 +6,7 @@ import me.owdding.skyocean.features.misc.`fun`.animal.AnimalModifier
 import me.owdding.skyocean.features.misc.`fun`.animal.AnimalModifier.Companion.createTranslationKey
 import me.owdding.skyocean.features.misc.`fun`.animal.CollarColor
 import me.owdding.skyocean.features.misc.`fun`.animal.RegisterAnimalModifier
-import net.minecraft.client.renderer.entity.state.AvatarRenderState
+import net.minecraft.client.renderer.entity.state.PlayerRenderState as AvatarRenderState
 import net.minecraft.client.renderer.entity.state.HappyGhastRenderState
 import net.minecraft.world.entity.EntityType
 import net.minecraft.world.entity.animal.HappyGhast

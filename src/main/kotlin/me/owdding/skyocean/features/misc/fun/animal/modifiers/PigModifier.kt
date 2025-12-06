@@ -7,7 +7,7 @@ import me.owdding.skyocean.features.misc.`fun`.animal.AnimalModifier.Companion.c
 import me.owdding.skyocean.features.misc.`fun`.animal.RegisterAnimalModifier
 import me.owdding.skyocean.utils.Utils.list
 import me.owdding.skyocean.utils.Utils.lookup
-import net.minecraft.client.renderer.entity.state.AvatarRenderState
+import net.minecraft.client.renderer.entity.state.PlayerRenderState as AvatarRenderState
 import net.minecraft.client.renderer.entity.state.PigRenderState
 import net.minecraft.core.registries.Registries
 import net.minecraft.resources.ResourceKey

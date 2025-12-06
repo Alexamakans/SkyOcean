@@ -5,7 +5,7 @@ import com.teamresourceful.resourcefulconfigkt.api.ObjectKt
 import com.teamresourceful.resourcefulconfigkt.api.RConfigKtEntry
 import me.owdding.skyocean.accessors.AvatarRenderStateAccessor
 import me.owdding.skyocean.features.misc.`fun`.animal.CollarColor
-import net.minecraft.client.renderer.entity.state.AvatarRenderState
+import net.minecraft.client.renderer.entity.state.PlayerRenderState as AvatarRenderState
 import net.minecraft.world.entity.EntityType
 import kotlin.reflect.KProperty
 

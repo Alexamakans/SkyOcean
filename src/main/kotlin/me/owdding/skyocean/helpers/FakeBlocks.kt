@@ -16,10 +16,10 @@ import net.minecraft.world.level.block.Block
 import net.minecraft.world.level.block.state.BlockState
 import tech.thatgravyboat.skyblockapi.api.SkyBlockAPI
 //? if > 1.21.8 {
-import net.minecraft.server.packs.resources.PreparableReloadListener
+/*import net.minecraft.server.packs.resources.PreparableReloadListener
 
-//?} else
-/*import net.minecraft.server.packs.resources.ResourceManager*/
+*///?} else
+import net.minecraft.server.packs.resources.ResourceManager
 
 typealias FakeBlockEntry = Pair<ResourceLocation, (BlockState, BlockPos) -> Boolean>
 typealias FakeBlockUnbakedEntry = Pair<FakeBlockStateDefinition, (BlockState, BlockPos) -> Boolean>
@@ -48,10 +48,10 @@ object FakeBlocks : PreparableModelLoadingPlugin<Map<ResourceLocation, FakeBlock
     }
 
     //? if > 1.21.8 {
-    fun init(manager: PreparableReloadListener.SharedState, executor: Executor): CompletableFuture<Map<ResourceLocation, FakeBlockStateDefinition>> {
+    /*fun init(manager: PreparableReloadListener.SharedState, executor: Executor): CompletableFuture<Map<ResourceLocation, FakeBlockStateDefinition>> {
         val manager = manager.resourceManager()
-        //?} else
-        /*fun init(manager:  ResourceManager, executor: Executor): CompletableFuture<Map<ResourceLocation, FakeBlockStateDefinition>> {*/
+        *///?} else
+        fun init(manager:  ResourceManager, executor: Executor): CompletableFuture<Map<ResourceLocation, FakeBlockStateDefinition>> {
         fakeBlocks.clear()
         RegisterFakeBlocksEvent(this::register).post(SkyBlockAPI.eventBus)
 
