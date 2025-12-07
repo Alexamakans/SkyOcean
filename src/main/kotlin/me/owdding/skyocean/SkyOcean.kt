@@ -43,6 +43,7 @@ object SkyOcean : ClientModInitializer, MeowddingLogger by MeowddingLogger.autoR
     val VERSION: String = SELF.metadata.version.friendlyString
     const val DISCORD = "https://meowdd.ing/discord"
 
+
     init {
         SkyOceanPreInitModules.init {
             SkyBlockAPI.eventBus.register(it)

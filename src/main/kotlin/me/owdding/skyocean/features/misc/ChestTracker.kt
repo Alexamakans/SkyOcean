@@ -1,5 +1,6 @@
 package me.owdding.skyocean.features.misc
 
+import com.mojang.logging.LogUtils
 import me.owdding.ktmodules.Module
 import me.owdding.skyocean.SkyOcean
 import me.owdding.skyocean.data.profile.IslandChestStorage
@@ -14,12 +15,12 @@ import net.minecraft.network.chat.contents.TranslatableContents
 import net.minecraft.world.entity.player.Inventory
 import net.minecraft.world.inventory.Slot
 import net.minecraft.world.level.block.DoubleBlockCombiner
+import net.minecraft.world.level.block.state.BlockState
 import net.minecraft.world.level.block.state.properties.BlockStateProperties
 import net.minecraft.world.level.block.state.properties.ChestType
 import tech.thatgravyboat.skyblockapi.api.events.base.Subscription
 import tech.thatgravyboat.skyblockapi.api.events.base.predicates.MustBeContainer
 import tech.thatgravyboat.skyblockapi.api.events.base.predicates.OnlyIn
-import tech.thatgravyboat.skyblockapi.api.events.level.BlockChangeEvent
 import tech.thatgravyboat.skyblockapi.api.events.level.RightClickBlockEvent
 import tech.thatgravyboat.skyblockapi.api.events.screen.ContainerCloseEvent
 import tech.thatgravyboat.skyblockapi.api.events.screen.InventoryChangeEvent
@@ -33,11 +34,14 @@ object ChestTracker {
     private var first: BlockPos? = null
     private var second: BlockPos? = null
     private var container: List<Slot>? = null
+    private var logger = LogUtils.getLogger()
+
 
     private fun resetCoords() {
         first = null
         second = null
     }
+
 
     @Subscription
     @OnlyIn(SkyBlockIsland.PRIVATE_ISLAND)
@@ -67,13 +71,14 @@ object ChestTracker {
                 this.first = doubleChestPosition
             }
         }
-
     }
 
-    @Subscription
-    @OnlyIn(SkyBlockIsland.PRIVATE_ISLAND)
-    private fun BlockChangeEvent.onBlockBreak() {
-        if (McLevel[pos] in BlockTagKey.CHESTS && state !in BlockTagKey.CHESTS) {
+    fun handleBlockChange(
+        pos: BlockPos,
+        oldState: BlockState,
+        newState: BlockState
+    ) {
+        if (oldState in BlockTagKey.CHESTS && newState !in BlockTagKey.CHESTS) {
             IslandChestStorage.removeBlock(pos)
         }
     }
@@ -113,7 +118,6 @@ object ChestTracker {
                 SkyOcean.warn("Failed to save item ${slot.item.item.name.stripped} at position ($first, $second)")
             }
         }
-        IslandChestStorage.save()
         resetCoords()
         ChestTracker.container = null
     }

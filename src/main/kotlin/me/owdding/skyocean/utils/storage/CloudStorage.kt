@@ -1,15 +1,14 @@
 package me.owdding.skyocean.utils.storage
 
 import com.google.gson.JsonParser
+import com.mojang.authlib.minecraft.client.MinecraftClient
 import com.mojang.serialization.Codec
 import com.mongodb.client.model.IndexOptions
 import com.mongodb.client.model.Indexes
 import com.mongodb.client.model.Filters
 import com.mongodb.client.model.UpdateOptions
-import com.mongodb.reactivestreams.client.MongoClient
 import com.mongodb.reactivestreams.client.MongoCollection
 import me.owdding.ktmodules.Module
-import me.owdding.skyocean.SkyOcean
 import me.owdding.skyocean.data.profile.ChestItem
 import me.owdding.skyocean.generated.SkyOceanCodecs
 import net.minecraft.core.BlockPos
@@ -24,10 +23,26 @@ import tech.thatgravyboat.skyblockapi.api.events.time.TickEvent
 import tech.thatgravyboat.skyblockapi.utils.json.Json.toDataOrThrow
 import tech.thatgravyboat.skyblockapi.utils.json.Json.toJson
 import java.util.concurrent.CompletableFuture
-import java.util.concurrent.CopyOnWriteArrayList
 import com.mojang.logging.LogUtils
+import com.mongodb.ConnectionString
+import com.mongodb.MongoClientSettings
+import com.mongodb.event.ConnectionCheckOutFailedEvent
+import com.mongodb.event.ConnectionPoolListener
+import com.mongodb.reactivestreams.client.MongoClients
+import kotlinx.atomicfu.locks.ReentrantLock
+import kotlinx.atomicfu.locks.withLock
+import net.minecraft.client.Minecraft
+import net.minecraft.world.item.ItemStack
+import net.minecraft.world.item.Items
+import tech.thatgravyboat.skyblockapi.api.events.profile.ProfileChangeEvent
+import java.util.concurrent.TimeUnit
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.TimeSource
+import net.minecraft.nbt.CompoundTag
+import net.minecraft.network.protocol.game.ClientboundPlayerChatPacket
+import net.minecraft.network.protocol.game.ClientboundSystemChatPacket
+import tech.thatgravyboat.skyblockapi.api.events.level.PacketReceivedEvent
+import tech.thatgravyboat.skyblockapi.utils.extentions.tag
 
 
 /**
@@ -38,108 +53,201 @@ import kotlin.time.TimeSource
  * - Updates only applied if incoming lastAccessed > stored lastAccessed.
  * - Returns cached data immediately; background refresh fills it in.
  */
-internal class CloudStorage(
-    private val mongo: MongoClient,
-    private val databaseName: String = "skyocean",
-    private val collectionName: String = "profile_chest_items",
-    private val defaultData: () -> CopyOnWriteArrayList<ChestItem> = { CopyOnWriteArrayList() },
-    private val itemCodec: Codec<ChestItem> = SkyOceanCodecs.ChestItemCodec.codec(),
-) {
+@Module
+object CloudStorage {
+    private val itemCodec: Codec<ChestItem> = SkyOceanCodecs.ChestItemCodec.codec()
+    fun buildMongo(uri: String) = MongoClients.create(
+        MongoClientSettings.builder()
+            .applyConnectionString(ConnectionString("$uri&retryWrites=false")) // or add ?retryWrites=false in URI
+            .applyToClusterSettings { b ->
+                b.serverSelectionTimeout(5, TimeUnit.SECONDS) // fail fast if server down
+            }
+            .applyToSocketSettings { b ->
+                b.connectTimeout(5, TimeUnit.SECONDS)
+                b.readTimeout(10, TimeUnit.SECONDS)
+            }
+            .applyToConnectionPoolSettings { b ->
+                b.maxSize(20)                  // cap total connections
+                b.maxConnecting(4)             // avoid spikes
+                b.maxWaitTime(5, TimeUnit.SECONDS) // don't wait 2 minutes for a socket
+                b.maxConnectionIdleTime(60, TimeUnit.SECONDS)
+                b.addConnectionPoolListener(object : ConnectionPoolListener {
+                    override fun connectionCheckOutFailed(event: ConnectionCheckOutFailedEvent) {
+                        // shows when you’d otherwise hit that 127s stall
+                        me.owdding.skyocean.SkyOcean.warn("Mongo checkout failed: ${event.reason}")
+                    }
+                })
+            }
+            .applyToServerSettings { b -> b.heartbeatFrequency(10, TimeUnit.SECONDS) }
+            .build()
+    )
+
+    // Build/reuse your MongoClient somewhere central in your mod, then inject it here.
+    private val mongoURI = System.getProperty("skyocean.mongo.uri") ?: System.getenv("SKYOCEAN_MONGO_URI") ?: throw IllegalStateException("Mongo URI not configured")
+    private val mongo = buildMongo(mongoURI)
+
+    private const val databaseName = "skyocean"
+    private var defaultData = { ArrayList<ChestItem>() }
+    var currentProfile: String? = null
+    private val PROFILE_ID_REGEX =
+        Regex("""Profile ID:\s*([0-9a-fA-F-]{36})""")
+
+    @EventSub
+    fun onChat(event: PacketReceivedEvent) {
+        val packet = event.packet
+
+        if (packet is ClientboundSystemChatPacket) {
+            val msg = packet.content.string
+            handleProfileIdMessage(msg)
+        }
+    }
+
+    fun handleProfileIdMessage(msg: String) {
+        val match = PROFILE_ID_REGEX.find(msg) ?: return
+        val id = match.groupValues[1]
+        lock.withLock {
+            logger.info("Extracted Profile ID: $id")
+            currentProfile = id
+            data = defaultData()
+            collection = mongo.getDatabase(databaseName).getCollection(currentProfile!!)
+            ensureIndexes(collection!!)
+        }
+    }
+
+    val lock: ReentrantLock = ReentrantLock()
     private var logger = LogUtils.getLogger()
     private val t = TimeSource.Monotonic
     private val invalidateAfter = 1.seconds
     private var lastFetch = t.markNow()
 
     // In-memory cache (can be stale; that's okay by design)
-    private lateinit var data: CopyOnWriteArrayList<ChestItem>
+    private lateinit var data: ArrayList<ChestItem>
 
-    // Snapshot to compute per-item deletions
-    private var lastSnapshot: Map<String, ChestItem> = emptyMap()
-
-    private val collection: MongoCollection<Document> by lazy {
-        mongo.getDatabase(databaseName).getCollection(collectionName)
-    }
-
-    init {
-        ensureIndexes(collection)
-    }
+    private var collection: MongoCollection<Document>? = null
 
     // ---- Public API (mirrors enough of ProfileStorage to be drop-in) ---------
 
-    fun get(): CopyOnWriteArrayList<ChestItem> {
-        if (!this::data.isInitialized) {
-            data = defaultData()
+    fun get(): ArrayList<ChestItem> {
+        lock.withLock {
+            if (!this::data.isInitialized) {
+                data = defaultData()
+            }
+            load()
+            return data
         }
-        load()
-        return data
     }
 
     fun save() {
         requiresSave.add(this)
     }
 
+    fun add(item: ChestItem) {
+        lock.withLock {
+            data.add(item)
+            save()
+        }
+    }
+
+    fun clear() {
+        lock.withLock {
+            data.clear()
+            save()
+        }
+    }
+
+    fun removeBlock(position: BlockPos) {
+        lock.withLock {
+            if (!this::data.isInitialized) {
+                data = defaultData()
+            }
+
+            val now = System.currentTimeMillis()
+            val newList = ArrayList<ChestItem>(data.size)
+
+            for (item in data) {
+                when {
+                    // Remove items whose primary position matches
+                    item.pos == position -> {
+                        newList.add(item.copy(itemStack = ItemStack(Items.AIR), pos = position, lastAccessed = now))
+                    }
+
+                    // Convert items whose secondary position matches
+                    item.pos2 == position -> {
+                        newList.add(
+                            item.copy(
+                                pos2 = null,
+                                lastAccessed = now
+                            )
+                        )
+                    }
+
+                    // Keep all others unchanged
+                    else -> newList.add(item)
+                }
+            }
+
+            data.clear()
+            data.addAll(newList)
+
+            save()
+        }
+    }
+
     // You can call manually, but normally triggered via autosave tick
     fun load() {
-        if (!this::data.isInitialized) data = defaultData()
-        if (t.markNow() - lastFetch < invalidateAfter) {
-            return
-        }
-        lastFetch = t.markNow()
-
-        logger.warn("CloudStorage.load() triggered")
-        //val filter = Filters.and(
-        //    Filters.ne("deleted", true),
-        //    Filters.not(Filters.regex("dataJson", "\\\"item_stack\\\"\\s*:\\s*\\{\\s*\\}"))
-        //)
-        collection.find().subscribe(
-            onNext = { doc ->
-                decodeDoc(doc)?.let { incoming ->
-                    val key = keyOf(incoming)
-                    val existingIndex = data.indexOfFirst { keyOf(it) == key }
-                    val existing = if (existingIndex >= 0) data[existingIndex] else null
-                    if (existing == null || incoming.lastAccessed > existing.lastAccessed) {
-                        if (existingIndex >= 0) data[existingIndex] = incoming else data.add(incoming)
-                    }
-                }
-            },
-            onError = { e -> logger.error("Mongo load() failed", e) },
-            onComplete = {
-                lastSnapshot = data.associateBy { keyOf(it) }
-                logger.debug("Cloud load complete: ${lastSnapshot.size} chest items")
+        lock.withLock {
+            if (collection == null) {
+                return
             }
-        )
+            if (!this::data.isInitialized) data = defaultData()
+            if (t.markNow() - lastFetch < invalidateAfter) {
+                return
+            }
+            lastFetch = t.markNow()
+
+            //logger.warn("CloudStorage.load() triggered")
+            //val filter = Filters.and(
+            //    Filters.ne("deleted", true),
+            //    Filters.not(Filters.regex("dataJson", "\\\"item_stack\\\"\\s*:\\s*\\{\\s*\\}"))
+            //)
+            collection!!.find().subscribe(
+                onNext = { doc ->
+                    decodeDoc(doc)?.let { incoming ->
+                        val key = keyOf(incoming)
+                        val existingIndex = data.indexOfFirst { keyOf(it) == key }
+                        val existing = if (existingIndex >= 0) data[existingIndex] else null
+                        if (existing == null || incoming.lastAccessed > existing.lastAccessed) {
+                            if (existingIndex >= 0) data[existingIndex] = incoming else data.add(incoming)
+                        }
+                    }
+                },
+                onError = { e -> logger.error("Mongo load() failed", e) },
+                onComplete = {
+                    // logger.debug("Cloud load complete: ${lastSnapshot.size} chest items")
+                }
+            )
+        }
     }
 
     // ---- Internal: autosave + DB I/O ----------------------------------------
 
     private fun saveToSystem() {
-        if (!this::data.isInitialized) return
+        lock.withLock {
+            if (collection == null) {
+                return
+            }
+            if (!this::data.isInitialized) return
 
-        val currentMap = data.associateBy { keyOf(it) }
-        val removedKeys = lastSnapshot.keys - currentMap.keys
-        val removedItems = removedKeys.mapNotNull { lastSnapshot[it] }
-        val upserts = currentMap.values
-
-        // Per-item deletions
-        removedItems.forEach { item ->
-            collection.updateOne(keyFilter(item), softDeletePipeline(item), UpdateOptions().upsert(true)).subscribe(
-                onComplete = { logger.debug("Deleted ${prettyKey(item)} from Mongo.") },
-                onError = { e -> logger.error("Delete failed for ${prettyKey(item)}", e) }
-            )
+            // Per-item gated upserts (only if incoming.lastAccessed is newer)
+            val opts = UpdateOptions().upsert(true)
+            data.forEach { item ->
+                val filter = keyFilter(item)
+                val pipeline = gatedUpsertPipeline(item)
+                collection!!.updateOne(filter, pipeline, opts).subscribe(
+                    onError = { e -> logger.error("Upsert failed for ${prettyKey(item)}", e) }
+                )
+            }
         }
-
-        // Per-item gated upserts (only if incoming.lastAccessed is newer)
-        val opts = UpdateOptions().upsert(true)
-        upserts.forEach { item ->
-            val filter = keyFilter(item)
-            val pipeline = gatedUpsertPipeline(item)
-            collection.updateOne(filter, pipeline, opts).subscribe(
-                onError = { e -> logger.error("Upsert failed for ${prettyKey(item)}", e) }
-            )
-        }
-
-        // Update local snapshot immediately; DB completes in background
-        lastSnapshot = currentMap
     }
 
     private fun ensureIndexes(coll: MongoCollection<Document>) {
@@ -167,17 +275,6 @@ internal class CloudStorage(
             "deleted" to Document($$"$cond", listOf(newer, false, $$"$deleted")),
             "dataJson" to Document($$"$cond", listOf(newer, encodeJson(item), $$"$dataJson")),
             // was `$currentDate: { writeAt: true }`
-            "writeAt" to Document($$"$cond", listOf(newer, $$$"$$NOW", $$"$writeAt")),
-        ))
-        return listOf(Document($$"$set", setPayload))
-    }
-
-    private fun softDeletePipeline(item: ChestItem): List<Bson> {
-        val newer = Document($$"$gt", listOf(item.lastAccessed, Document($$"$ifNull", listOf($$"$lastAccessed", -1L))))
-        val setPayload = Document(mapOf(
-            "lastAccessed" to Document($$"$cond", listOf(newer, item.lastAccessed, $$"$lastAccessed")),
-            "deleted" to Document($$"$cond", listOf(newer, true, $$"$deleted")),
-            "deletedAt" to Document($$"$cond", listOf(newer, item.lastAccessed, $$"$deletedAt")),
             "writeAt" to Document($$"$cond", listOf(newer, $$$"$$NOW", $$"$writeAt")),
         ))
         return listOf(Document($$"$set", setPayload))
@@ -229,18 +326,15 @@ internal class CloudStorage(
 
     // ---- Autosave + profile tracking (5s, async) ----------------------------
 
-    @Module
-    companion object {
-        val requiresSave = mutableSetOf<CloudStorage>()
+    val requiresSave = mutableSetOf<CloudStorage>()
 
-        @EventSub(TickEvent::class)
-        @TimePassed("5s")
-        fun onTick() {
-            val toSave = requiresSave.toTypedArray()
-            requiresSave.clear()
-            CompletableFuture.runAsync {
-                toSave.forEach { it.saveToSystem() }
-            }
+    @EventSub(TickEvent::class)
+    @TimePassed("5s")
+    fun onTick() {
+        val toSave = requiresSave.toTypedArray()
+        requiresSave.clear()
+        CompletableFuture.runAsync {
+            toSave.forEach { it.saveToSystem() }
         }
     }
 }

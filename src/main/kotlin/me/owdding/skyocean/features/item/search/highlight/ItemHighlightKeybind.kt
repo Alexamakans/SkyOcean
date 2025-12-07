@@ -31,11 +31,9 @@ object ItemHighlightKeybind {
 
         // It's run on the next tick because setHighlight also uses runNextTick and clears all chests
         McClient.runNextTick {
-            IslandChestStorage.lock()
             IslandChestStorage.getItems().filter { filter.test(it.itemStack) }.flatMap { (_, _, pos1, pos2) ->
                 listOfNotNull(pos1, pos2)
             }.distinct().let(ItemHighlighter::addChests)
-            IslandChestStorage.unlock()
             ItemHighlighter.recalculate()
         }
     }

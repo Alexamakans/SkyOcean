@@ -27,6 +27,8 @@ import tech.thatgravyboat.skyblockapi.utils.text.TextColor
 import tech.thatgravyboat.skyblockapi.utils.text.TextStyle.bold
 import tech.thatgravyboat.skyblockapi.utils.text.TextStyle.color
 import java.util.concurrent.atomic.AtomicReference
+import kotlin.time.Duration.Companion.seconds
+import kotlin.time.TimeSource
 
 @Module
 object CraftHelperManager {
@@ -34,6 +36,11 @@ object CraftHelperManager {
     var hasBeenNotified = false
     var lastEvaluatedRoot: AtomicReference<CraftHelperState?> = AtomicReference()
     private val keybind = SkyOceanKeybind("crafthelper", InputConstants.KEY_V)
+
+    private val t = TimeSource.Monotonic
+    private val invalidateAfter = 5.seconds
+    private var lastFetch = t.markNow()
+    private var cachedItemTracker: ItemTracker? = null
 
 
     fun clear() {
@@ -50,6 +57,10 @@ object CraftHelperManager {
             lastEvaluatedRoot.set(null)
         }
         val (tree) = CraftHelperStorage.data?.resolve({}, ::clear) ?: return
+        if (t.markNow() - lastFetch > invalidateAfter || cachedItemTracker == null) {
+            cachedItemTracker = ItemTracker(ItemSources.craftHelperSources - CraftHelperConfig.disallowedSources.toSet())
+            lastFetch = t.markNow()
+        }
         SimpleRecipeView {
             if (it.path != "root") return@SimpleRecipeView
             lastEvaluatedRoot.set(it)
@@ -64,7 +75,7 @@ object CraftHelperManager {
                 } ?: append("your selected craft helper tree")
                 append("!")
             }.sendWithPrefix()
-        }.visit(tree, ItemTracker(ItemSources.craftHelperSources - CraftHelperConfig.disallowedSources.toSet()))
+        }.visit(tree, cachedItemTracker!!)
     }
 
 
