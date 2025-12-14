@@ -13,13 +13,17 @@ object IslandChestStorage {
 
     val storage = CloudStorage
 
-    fun getItems(): List<ChestItem> {
-        // logger.warn("IslandChestStorage getItems skyocean")
-        return storage.get()
+    fun getItemsFiltered(filter: (ChestItem) -> Boolean): List<ChestItem> {
+        return storage.getFiltered(filter)
     }
 
-    fun hasBlock(position: BlockPos) =
-        storage.get().any { (_, _, pos) -> pos == position }
+    fun <R> getItemsMapped(transform: (ChestItem) -> R): List<R> {
+        return storage.getMapped(transform)
+    }
+
+    fun hasBlock(position: BlockPos): Boolean {
+        return storage.hasBlock(position)
+    }
 
     fun removeBlock(position: BlockPos) {
         storage.removeBlock(position)

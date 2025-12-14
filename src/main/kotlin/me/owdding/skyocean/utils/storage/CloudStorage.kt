@@ -31,18 +31,13 @@ import com.mongodb.event.ConnectionPoolListener
 import com.mongodb.reactivestreams.client.MongoClients
 import kotlinx.atomicfu.locks.ReentrantLock
 import kotlinx.atomicfu.locks.withLock
-import net.minecraft.client.Minecraft
 import net.minecraft.world.item.ItemStack
 import net.minecraft.world.item.Items
-import tech.thatgravyboat.skyblockapi.api.events.profile.ProfileChangeEvent
 import java.util.concurrent.TimeUnit
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.TimeSource
-import net.minecraft.nbt.CompoundTag
-import net.minecraft.network.protocol.game.ClientboundPlayerChatPacket
 import net.minecraft.network.protocol.game.ClientboundSystemChatPacket
 import tech.thatgravyboat.skyblockapi.api.events.level.PacketReceivedEvent
-import tech.thatgravyboat.skyblockapi.utils.extentions.tag
 
 
 /**
@@ -111,6 +106,7 @@ object CloudStorage {
             data = defaultData()
             collection = mongo.getDatabase(databaseName).getCollection(currentProfile!!)
             ensureIndexes(collection!!)
+            loadNoLock()
         }
     }
 
@@ -121,7 +117,7 @@ object CloudStorage {
     private var lastFetch = t.markNow()
 
     // In-memory cache (can be stale; that's okay by design)
-    private lateinit var data: ArrayList<ChestItem>
+    private var data: ArrayList<ChestItem> = defaultData()
 
     private var collection: MongoCollection<Document>? = null
 
@@ -129,11 +125,22 @@ object CloudStorage {
 
     fun get(): ArrayList<ChestItem> {
         lock.withLock {
-            if (!this::data.isInitialized) {
-                data = defaultData()
-            }
-            load()
+            loadNoLock()
             return data
+        }
+    }
+
+    fun <R> getMapped(transform: (ChestItem) -> R): List<R> {
+        lock.withLock {
+            loadNoLock()
+            return data.map(transform)
+        }
+    }
+
+    fun getFiltered(filter: (ChestItem) -> Boolean): List<ChestItem> {
+        lock.withLock {
+            loadNoLock()
+            return data.filter(filter)
         }
     }
 
@@ -143,6 +150,7 @@ object CloudStorage {
 
     fun add(item: ChestItem) {
         lock.withLock {
+            loadNoLock()
             data.add(item)
             save()
         }
@@ -150,17 +158,23 @@ object CloudStorage {
 
     fun clear() {
         lock.withLock {
+            loadNoLock()
+            // no idea if this works
             data.clear()
             save()
         }
     }
 
+    fun hasBlock(position: BlockPos): Boolean {
+        lock.withLock {
+            loadNoLock()
+            return data.any { (_, _, pos) -> pos == position }
+        }
+    }
+
     fun removeBlock(position: BlockPos) {
         lock.withLock {
-            if (!this::data.isInitialized) {
-                data = defaultData()
-            }
-
+            loadNoLock()
             val now = System.currentTimeMillis()
             val newList = ArrayList<ChestItem>(data.size)
 
@@ -196,37 +210,48 @@ object CloudStorage {
     // You can call manually, but normally triggered via autosave tick
     fun load() {
         lock.withLock {
-            if (collection == null) {
-                return
-            }
-            if (!this::data.isInitialized) data = defaultData()
-            if (t.markNow() - lastFetch < invalidateAfter) {
-                return
-            }
-            lastFetch = t.markNow()
+            loadNoLock()
+        }
+    }
 
-            //logger.warn("CloudStorage.load() triggered")
-            //val filter = Filters.and(
-            //    Filters.ne("deleted", true),
-            //    Filters.not(Filters.regex("dataJson", "\\\"item_stack\\\"\\s*:\\s*\\{\\s*\\}"))
-            //)
-            collection!!.find().subscribe(
-                onNext = { doc ->
-                    decodeDoc(doc)?.let { incoming ->
-                        val key = keyOf(incoming)
+    fun loadNoLock() {
+        //logger.warn("CloudStorage.load() triggered")
+
+        if (collection == null) {
+            logger.warn("Skipping load, collection was null")
+            return
+        }
+        if (t.markNow() - lastFetch < invalidateAfter) {
+            //logger.warn("Skipping load due to cooldown")
+            return
+        }
+        lastFetch = t.markNow()
+
+        //val filter = Filters.and(
+        //    Filters.ne("deleted", true),
+        //    Filters.not(Filters.regex("dataJson", "\\\"item_stack\\\"\\s*:\\s*\\{\\s*\\}"))
+        //)
+        var i = 0
+        collection!!.find().subscribe(
+            onNext = { doc ->
+                decodeDoc(doc)?.let { incoming ->
+                    val key = keyOf(incoming)
+
+                    lock.withLock {
                         val existingIndex = data.indexOfFirst { keyOf(it) == key }
                         val existing = if (existingIndex >= 0) data[existingIndex] else null
                         if (existing == null || incoming.lastAccessed > existing.lastAccessed) {
                             if (existingIndex >= 0) data[existingIndex] = incoming else data.add(incoming)
+                            i++
                         }
                     }
-                },
-                onError = { e -> logger.error("Mongo load() failed", e) },
-                onComplete = {
-                    // logger.debug("Cloud load complete: ${lastSnapshot.size} chest items")
                 }
-            )
-        }
+            },
+            onError = { e -> logger.error("Mongo load() failed", e) },
+            onComplete = {
+                // logger.debug("Cloud load complete: updated $i chest items")
+            }
+        )
     }
 
     // ---- Internal: autosave + DB I/O ----------------------------------------
@@ -236,7 +261,6 @@ object CloudStorage {
             if (collection == null) {
                 return
             }
-            if (!this::data.isInitialized) return
 
             // Per-item gated upserts (only if incoming.lastAccessed is newer)
             val opts = UpdateOptions().upsert(true)

@@ -13,11 +13,9 @@ import tech.thatgravyboat.skyblockapi.utils.text.TextStyle.color
 
 object ChestItemSource : ItemSource {
     override fun getAll(): List<SimpleTrackedItem> {
-        IslandChestStorage.storage.lock.lock()
-        val list = IslandChestStorage.getItems().map { (itemStack, _, pos, secondPos) ->
+        val list = IslandChestStorage.getItemsMapped { (itemStack, _, pos, secondPos) ->
             SimpleTrackedItem(itemStack, ChestItemContext(pos, secondPos))
         }
-        IslandChestStorage.storage.lock.unlock()
         return list
     }
 
